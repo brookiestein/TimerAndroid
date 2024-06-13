@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Temporizador</string>
+    <string name="title">Temporizador</string>
+    <string name="hours">Horas</string>
+    <string name="minutes">Minutos</string>
+    <string name="seconds">Seconds</string>
+    <string name="start">Iniciar</string>
+    <string name="pause">Pausar</string>
+    <string name="allZeroes">Indica por cuánto tiempo correré antes.</string>
+    <string name="stop">Detener</string>
+    <string name="resume">Resumir</string>
+    <string name="noNeedToPause">No hay necesidad de pausar.</string>
+    <string name="message">El temporizador terminará a las</string>
+    <string name="timerPaused">El temporizador está pausado.</string>
+    <string name="timerResumed">Temporizador reanudado.</string>
+</resources>

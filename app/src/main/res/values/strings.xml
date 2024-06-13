@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Timer</string>
+    <string name="title">Timer</string>
+    <string name="hours">Hours</string>
+    <string name="minutes">Minutes</string>
+    <string name="seconds">Seconds</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="timerPaused">Timer is paused.</string>
+    <string name="timerResumed">Timer resumed.</string>
+    <string name="allZeroes">Tell me for how long I\'ll be running first.</string>
+    <string name="noNeedToPause">No need to pause.</string>
+    <string name="message">Timer will end at</string>
+</resources>
