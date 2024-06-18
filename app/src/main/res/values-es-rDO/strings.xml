@@ -7,6 +7,7 @@
     <string name="seconds">Segundos</string>
     <string name="start">Iniciar</string>
     <string name="pause">Pausar</string>
+    <string name="timerStopped">Temporizador detenido.</string>
     <string name="allZeroes">Indica por cuánto tiempo correré antes.</string>
     <string name="stop">Detener</string>
     <string name="resume">Resumir</string>

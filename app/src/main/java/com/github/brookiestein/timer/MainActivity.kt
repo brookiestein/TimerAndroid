@@ -3,7 +3,11 @@ package com.github.brookiestein.timer
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.appcompat.app.AppCompatActivity
@@ -17,6 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -25,15 +30,47 @@ import kotlin.concurrent.thread
 class MainActivity : AppCompatActivity() {
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
     private lateinit var preferences: SharedPreferences
+    private lateinit var startButton: Button
+    private lateinit var pauseButton: Button
     private lateinit var timer: Timer
     private lateinit var started: Date
     private val notificationChannelID = 0
     private var endAtText = ""
     private var totalDuration: Long = 0
 
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val action = intent.action
+
+            when (action) {
+                getString(R.string.stopAction) -> {
+                    startButton.callOnClick()
+                }
+                getString(R.string.pauseAction) -> {
+                    pauseButton.callOnClick()
+                }
+                getString(R.string.resumeAction) -> {
+                    pauseButton.callOnClick()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        val intentFilter = IntentFilter().apply {
+            addAction(getString(R.string.stopAction))
+            addAction(getString(R.string.pauseAction))
+            addAction(getString(R.string.resumeAction))
+        }
+        ContextCompat.registerReceiver(
+            this,
+            receiver,
+            intentFilter,
+            ContextCompat.RECEIVER_EXPORTED
+        )
 
         preferences = getPreferences(Context.MODE_PRIVATE)
         requestPermissionLauncher = registerForActivityResult(
@@ -78,8 +115,8 @@ class MainActivity : AppCompatActivity() {
             secondsPicker.isEnabled = it
         }
 
-        val startButton: Button = findViewById(R.id.startButton)
-        val pauseButton: Button = findViewById(R.id.pauseButton)
+        startButton = findViewById(R.id.startButton)
+        pauseButton = findViewById(R.id.pauseButton)
 
         timer = Timer(hoursPicker, minutesPicker, secondsPicker)
         var thread: Thread
@@ -97,6 +134,13 @@ class MainActivity : AppCompatActivity() {
             if (startButton.text == getString(R.string.stop)) {
                 startButton.text = getString(R.string.start)
                 timer.stop()
+                Toast
+                    .makeText(
+                        this,
+                        getString(R.string.timerStopped),
+                        Toast.LENGTH_SHORT
+                    )
+                    .show()
                 return@setOnClickListener
             }
 
@@ -122,6 +166,7 @@ class MainActivity : AppCompatActivity() {
 
             val checkForTimerFinished = thread(false) {
                 var firstTime = true
+                var sentLastNotification = false
                 setStatusText(
                     false,
                     hoursPicker.value,
@@ -131,13 +176,15 @@ class MainActivity : AppCompatActivity() {
                 )
 
                 while (!timer.atEnd()) {
-                    /* Runner can be paused but not at the end. */
-                    if (timer.isRunning()) {
+                    if (timer.isRunning() || !sentLastNotification) {
+                        sentLastNotification = !timer.isRunning()
+
                         sendNotification(
                             hoursPicker,
                             minutesPicker,
                             secondsPicker,
-                            firstTime
+                            firstTime,
+                            sentLastNotification
                         )
                     }
 
@@ -210,6 +257,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancelAll()
+        unregisterReceiver(receiver)
         super.onDestroy()
     }
 
@@ -295,13 +343,40 @@ class MainActivity : AppCompatActivity() {
     private fun sendNotification(hoursPicker: NumberPicker,
                                 minutesPicker: NumberPicker,
                                 secondsPicker: NumberPicker,
-                                 firstTime: Boolean)
+                                 firstTime: Boolean,
+                                 lastNotification: Boolean)
     {
         val h = hoursPicker.value
         val m = minutesPicker.value
         val s = secondsPicker.value
         val content = String.format(getString(R.string.format), h, m, s)
 
+        val stopIntent = Intent(getString(R.string.stopAction))
+        val pauseOrResumeIntent = if (lastNotification) {
+            Intent(getString(R.string.resumeAction))
+        } else {
+            Intent(getString(R.string.pauseAction))
+        }
+
+        val stopPendingIntent = PendingIntent.getBroadcast(
+            this,
+            0,
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val pausePendingIntent = PendingIntent.getBroadcast(
+            this,
+            1,
+            pauseOrResumeIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val pauseOrResumeActionText = if (lastNotification) {
+            getString(R.string.resume)
+        } else {
+            getString(R.string.pause)
+        }
         val builder = NotificationCompat.Builder(
             this, getString(R.string.app_name)
         )
@@ -320,6 +395,16 @@ class MainActivity : AppCompatActivity() {
                 100,
                 elapsedTimeInPercentage().toInt(),
                 false
+            )
+            .addAction(
+                R.drawable.logo,
+                getString(R.string.stop),
+                stopPendingIntent
+            )
+            .addAction(
+                R.drawable.logo,
+                pauseOrResumeActionText,
+                pausePendingIntent
             )
 
         with(NotificationManagerCompat.from(this@MainActivity)) {

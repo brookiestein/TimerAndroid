@@ -10,6 +10,7 @@
     <string name="resume">Resume</string>
     <string name="timerPaused">Timer is paused.</string>
     <string name="timerResumed">Timer resumed.</string>
+    <string name="timerStopped">Timer stopped.</string>
     <string name="allZeroes">Tell me for how long I\'ll be running first.</string>
     <string name="noNeedToPause">No need to pause.</string>
     <string name="message">Timer will end at</string>
@@ -22,4 +23,5 @@
     <string name="noAction" translatable="false">NoAction</string>
     <string name="stopAction" translatable="false">com.github.brookiestein.timer.stop</string>
     <string name="pauseAction" translatable="false">com.github.brookiestein.timer.pause</string>
+    <string name="resumeAction" translatable="false">com.github.brookiestein.timer.resume</string>
 </resources>
