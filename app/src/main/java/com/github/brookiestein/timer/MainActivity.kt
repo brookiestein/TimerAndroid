@@ -1,91 +1,64 @@
 package com.github.brookiestein.timer
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.widget.Button
 import android.widget.NumberPicker
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.concurrent.thread
 
-class Run(
-    private val hoursPicker: NumberPicker,
-    private val minutesPicker: NumberPicker,
-    private val secondsPicker: NumberPicker,
-    private val setStatusText: (Boolean, Int, Int, Int) -> Unit
-) : Runnable {
-    private var running = false
-    private var end = false
-    private var hasBeenStarted = false
-    private var hours = hoursPicker.value
-    private var minutes = minutesPicker.value
-    private var seconds = secondsPicker.value
-
-    fun start() {
-        if (hasBeenStarted) {
-            return
-        }
-        running = true
-        end = false
-        hasBeenStarted = true
-        setStatusText(false, hours, minutes, seconds)
-    }
-
-    fun pause() {
-        running = false
-    }
-
-    fun stop() {
-        end = true
-        running = false
-        hoursPicker.value = 0
-        minutesPicker.value = 0
-        secondsPicker.value = 0
-        setStatusText(true, 0, 0, 0)
-    }
-
-    fun isRunning() = running
-    fun atEnd() = end
-
-    override fun run() {
-        while (running) {
-            if (seconds == 0) {
-                if (minutes > 0) {
-                    --minutes
-                    seconds = 60
-                } else {
-                    if (hours > 0) {
-                        --hours
-                        minutes = 59
-                        seconds = 60
-                    }
-                }
-            }
-
-            seconds -= 1
-            hoursPicker.value = hours
-            minutesPicker.value = minutes
-            secondsPicker.value = seconds
-
-            if (hours == 0 && minutes == 0 && seconds == 0) {
-                stop()
-                break
-            }
-
-            Thread.sleep(1000)
-        }
-    }
-}
-
 class MainActivity : AppCompatActivity() {
+    private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
+    private lateinit var preferences: SharedPreferences
+    private lateinit var timer: Timer
+    private lateinit var started: Date
+    private val notificationChannelID = 0
+    private var endAtText = ""
+    private var totalDuration: Long = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        preferences = getPreferences(Context.MODE_PRIVATE)
+        requestPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (!isGranted) {
+                Toast.makeText(
+                    this,
+                    getString(R.string.permissionDenied),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            with (preferences.edit()) {
+                putInt(getString(R.string.permissionAsked), 1)
+                apply()
+            }
+        }
+
+        createNotificationChannel()
+
         val hoursPicker: NumberPicker = findViewById(R.id.hoursPicker)
         val minutesPicker: NumberPicker = findViewById(R.id.minutesPicker)
         val secondsPicker: NumberPicker = findViewById(R.id.secondsPicker)
+        val statusText: TextView = findViewById(R.id.statusTextView)
+        var firstTimeRunningTimer = true
 
         hoursPicker.minValue = 0
         hoursPicker.maxValue = 23
@@ -99,83 +72,20 @@ class MainActivity : AppCompatActivity() {
         secondsPicker.maxValue = 59
         secondsPicker.value = 0
 
-        val setEnabled: (Boolean) -> Unit = { enabled ->
-            hoursPicker.isEnabled = enabled
-            minutesPicker.isEnabled = enabled
-            secondsPicker.isEnabled = enabled
-        }
-
-        val statusText: TextView = findViewById(R.id.statusTextView)
-        val setStatusText: (Boolean, Int, Int, Int) -> Unit = { clear, h, m, s ->
-            var text: String
-
-            if (clear) {
-                text = ""
-            } else {
-                val calendar = Calendar.getInstance()
-                var hour = h
-                var minutes = m
-                var seconds = s
-                var indicator = calendar.get(Calendar.AM_PM)
-
-                val calculateTime: () -> Unit = {
-                    while (seconds >= 60) {
-                        ++minutes
-                        seconds -= 60
-                    }
-
-                    while (minutes >= 60) {
-                        ++hour
-                        --minutes
-                    }
-
-                    while (hour >= 12) {
-                        hour -= 12
-                        indicator = if (indicator == Calendar.AM) {
-                            Calendar.PM
-                        } else {
-                            Calendar.AM
-                        }
-                    }
-                }
-
-                calculateTime()
-
-                hour += calendar.get(Calendar.HOUR)
-                minutes += calendar.get(Calendar.MINUTE)
-                seconds += calendar.get(Calendar.SECOND)
-
-                calculateTime()
-
-                val amPM = if (indicator == Calendar.AM) {
-                    "AM"
-                } else {
-                    "PM"
-                }
-
-                text = getString(R.string.message)
-                text += String.format(" %d:%d:%d %s", hour, minutes, seconds, amPM)
-            }
-
-            statusText.text = text
+        val setEnabled: (Boolean) -> Unit = {
+            hoursPicker.isEnabled = it
+            minutesPicker.isEnabled = it
+            secondsPicker.isEnabled = it
         }
 
         val startButton: Button = findViewById(R.id.startButton)
         val pauseButton: Button = findViewById(R.id.pauseButton)
 
-        var runner = Run(
-            hoursPicker, minutesPicker, secondsPicker,
-            setStatusText
-        )
-
+        timer = Timer(hoursPicker, minutesPicker, secondsPicker)
         var thread: Thread
 
         startButton.setOnClickListener {
-            val hours = hoursPicker.value
-            val minutes = minutesPicker.value
-            val seconds = secondsPicker.value
-
-            if (hours == 0 && minutes == 0 && seconds == 0) {
+            if (hoursPicker.value == 0 && minutesPicker.value == 0 && secondsPicker.value == 0) {
                 Toast.makeText(
                     this,
                     getString(R.string.allZeroes),
@@ -186,33 +96,66 @@ class MainActivity : AppCompatActivity() {
 
             if (startButton.text == getString(R.string.stop)) {
                 startButton.text = getString(R.string.start)
-                runner.stop()
+                timer.stop()
                 return@setOnClickListener
+            }
+
+            started = Date()
+            if (firstTimeRunningTimer) {
+                totalDuration = (hoursPicker.value * 3600000
+                        + minutesPicker.value * 60000
+                        + secondsPicker.value * 1000).toLong()
+                firstTimeRunningTimer = false
             }
 
             /* Make new thread every time user starts new timer because
              * threads cannot be restarted.
              */
-            runner = Run(
-                hoursPicker, minutesPicker, secondsPicker,
-                setStatusText
-            )
-            runner.start()
-            thread = Thread(runner)
+            timer = Timer(hoursPicker, minutesPicker, secondsPicker)
+            timer.start()
+            thread = Thread(timer)
             thread.start()
+
             startButton.text = getString(R.string.stop)
             pauseButton.text = getString(R.string.pause)
             setEnabled(false)
 
             val checkForTimerFinished = thread(false) {
-                while (!runner.atEnd()) {
+                var firstTime = true
+                setStatusText(
+                    false,
+                    hoursPicker.value,
+                    minutesPicker.value,
+                    secondsPicker.value,
+                    statusText
+                )
+
+                while (!timer.atEnd()) {
+                    /* Runner can be paused but not at the end. */
+                    if (timer.isRunning()) {
+                        sendNotification(
+                            hoursPicker,
+                            minutesPicker,
+                            secondsPicker,
+                            firstTime
+                        )
+                    }
+
+                    firstTime = false
+
                     Thread.sleep(1000)
                 }
 
                 runOnUiThread {
                     startButton.text = getString(R.string.start)
                     setEnabled(true)
+                    setStatusText(true, 0, 0, 0, statusText)
                 }
+
+                firstTimeRunningTimer = true
+
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.cancel(notificationChannelID)
             }
             checkForTimerFinished.start()
         }
@@ -233,7 +176,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (pauseButton.text == getString(R.string.pause)) {
-                runner.pause()
+                timer.pause()
                 pauseButton.text = getString(R.string.resume)
                 Toast
                     .makeText(
@@ -242,22 +185,154 @@ class MainActivity : AppCompatActivity() {
                         Toast.LENGTH_SHORT
                     ).show()
             } else {
-                runner = Run(
-                    hoursPicker, minutesPicker, secondsPicker,
-                    setStatusText
-                )
-                runner.start()
-                thread = Thread(runner)
+                timer = Timer(hoursPicker, minutesPicker, secondsPicker)
+                timer.start()
+                thread = Thread(timer)
                 thread.start()
                 pauseButton.text = getString(R.string.pause)
+                /* For progress bar to work as expected. */
+                started = Date()
+                totalDuration = (hours * 3600000
+                        + minutes * 60000
+                        + seconds * 1000).toLong()
 
                 Toast
                     .makeText(
                         this,
                         getString(R.string.timerResumed),
                         Toast.LENGTH_SHORT
-                    ).show()
+                    )
+                    .show()
             }
+        }
+    }
+
+    override fun onDestroy() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.cancelAll()
+        super.onDestroy()
+    }
+
+    private fun setStatusText(clear: Boolean, h: Int, m: Int, s: Int, statusText: TextView) {
+        if (clear) {
+            statusText.text = getString(R.string.empty)
+            return
+        }
+
+        val calendar = Calendar.getInstance()
+        var hour = h
+        var minutes = m
+        var seconds = s
+        var indicator = calendar.get(Calendar.AM_PM)
+
+        val calculateTime: () -> Unit = {
+            while (seconds >= 60) {
+                ++minutes
+                seconds -= 60
+            }
+
+            while (minutes >= 60) {
+                ++hour
+                --minutes
+            }
+
+            while (hour >= 12) {
+                hour -= 12
+                indicator = if (indicator == Calendar.AM) {
+                    Calendar.PM
+                } else {
+                    Calendar.AM
+                }
+            }
+        }
+
+        calculateTime()
+
+        hour += calendar.get(Calendar.HOUR)
+        minutes += calendar.get(Calendar.MINUTE)
+        seconds += calendar.get(Calendar.SECOND)
+
+        calculateTime()
+
+        val amPM = if (indicator == Calendar.AM) {
+            "AM"
+        } else {
+            "PM"
+        }
+
+        endAtText = getString(R.string.message)
+        endAtText += String.format(
+            Locale.getDefault(),
+            " %d:%d:%d %s",
+            hour,
+            minutes,
+            seconds,
+            amPM
+        )
+
+        statusText.text = endAtText
+    }
+
+    private fun createNotificationChannel() {
+        val name = getString(R.string.app_name)
+        val descriptionText = getString(R.string.app_name)
+        val importance = NotificationManager.IMPORTANCE_LOW
+        val channel = NotificationChannel(name, name, importance).apply {
+            description = descriptionText
+        }
+
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(channel)
+    }
+
+    private fun elapsedTimeInPercentage(): Long {
+        val currentTime = Date()
+        val elapsedMillis = currentTime.time - started.time
+        val percentage = elapsedMillis * 100 / totalDuration
+        return percentage
+    }
+
+    private fun sendNotification(hoursPicker: NumberPicker,
+                                minutesPicker: NumberPicker,
+                                secondsPicker: NumberPicker,
+                                 firstTime: Boolean)
+    {
+        val h = hoursPicker.value
+        val m = minutesPicker.value
+        val s = secondsPicker.value
+        val content = String.format(getString(R.string.format), h, m, s)
+
+        val builder = NotificationCompat.Builder(
+            this, getString(R.string.app_name)
+        )
+            .setSmallIcon(R.drawable.logo)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(content)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(String.format("%s\n%s", content, endAtText))
+            )
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setProgress(
+                100,
+                elapsedTimeInPercentage().toInt(),
+                false
+            )
+
+        with(NotificationManagerCompat.from(this@MainActivity)) {
+            val allowed = ActivityCompat.checkSelfPermission(this@MainActivity,
+                Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (!allowed
+                && preferences.getInt(getString(R.string.permissionAsked), 0) != 1
+                && firstTime) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return@with
+            }
+
+            notify(notificationChannelID, builder.build())
         }
     }
 }
