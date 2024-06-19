@@ -5,6 +5,7 @@
     <string name="hours">Horas</string>
     <string name="minutes">Minutos</string>
     <string name="seconds">Segundos</string>
+    <string name="runningForText">Durante %d %s, %d %s, %d %s</string>
     <string name="start">Iniciar</string>
     <string name="pause">Pausar</string>
     <string name="timerStopped">Temporizador detenido.</string>
@@ -18,4 +19,9 @@
     <string name="format">Tiempo restante: %d:%d:%d</string>
     <string name="notificationsNotAllowed">Mostrar notificaciones no permitido.</string>
     <string name="permissionDenied">Para tener una mejor experiencia, es recomendable permitir las notificaciones.</string>
+    <string name="hour">Hora</string>
+    <string name="minute">Minuto</string>
+    <string name="second">Segundo</string>
+    <string name="timerFinished">Temporizador terminado.</string>
+    <string name="stopRingtone">Detener tono</string>
 </resources>

@@ -22,6 +22,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -94,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         val hoursPicker: NumberPicker = findViewById(R.id.hoursPicker)
         val minutesPicker: NumberPicker = findViewById(R.id.minutesPicker)
         val secondsPicker: NumberPicker = findViewById(R.id.secondsPicker)
+        val runningForTextView: TextView = findViewById(R.id.runningForTextView)
         val statusText: TextView = findViewById(R.id.statusTextView)
         var firstTimeRunningTimer = true
 
@@ -117,8 +119,10 @@ class MainActivity : AppCompatActivity() {
 
         startButton = findViewById(R.id.startButton)
         pauseButton = findViewById(R.id.pauseButton)
+        val stopRingtoneButton: Button = findViewById(R.id.stopRingtoneButton)
+        stopRingtoneButton.isVisible = false
 
-        timer = Timer(hoursPicker, minutesPicker, secondsPicker)
+        timer = Timer(this, hoursPicker, minutesPicker, secondsPicker)
         var thread: Thread
 
         startButton.setOnClickListener {
@@ -146,6 +150,38 @@ class MainActivity : AppCompatActivity() {
 
             started = Date()
             if (firstTimeRunningTimer) {
+                val hours = hoursPicker.value
+                val minutes = minutesPicker.value
+                val seconds = secondsPicker.value
+
+                val hoursText = if (hours == 1) {
+                    getString(R.string.hour).lowercase()
+                } else {
+                    getString(R.string.hours).lowercase()
+                }
+
+                val minutesText = if (minutes == 1) {
+                    getString(R.string.minute).lowercase()
+                } else {
+                    getString(R.string.minutes).lowercase()
+                }
+
+                val secondsText = if (seconds == 1) {
+                    getString(R.string.second).lowercase()
+                } else {
+                    getString(R.string.seconds).lowercase()
+                }
+
+                runningForTextView.text = String.format(
+                    getString(R.string.runningForText),
+                    hours,
+                    hoursText,
+                    minutes,
+                    minutesText,
+                    seconds,
+                    secondsText
+                )
+
                 totalDuration = (hoursPicker.value * 3600000
                         + minutesPicker.value * 60000
                         + secondsPicker.value * 1000).toLong()
@@ -155,7 +191,7 @@ class MainActivity : AppCompatActivity() {
             /* Make new thread every time user starts new timer because
              * threads cannot be restarted.
              */
-            timer = Timer(hoursPicker, minutesPicker, secondsPicker)
+            timer = Timer(this, hoursPicker, minutesPicker, secondsPicker)
             timer.start()
             thread = Thread(timer)
             thread.start()
@@ -194,9 +230,36 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
+                    runningForTextView.text = getString(R.string.empty)
                     startButton.text = getString(R.string.start)
                     setEnabled(true)
                     setStatusText(true, 0, 0, 0, statusText)
+
+                    Toast
+                        .makeText(
+                            this,
+                            getString(R.string.timerFinished),
+                            Toast.LENGTH_LONG
+                        )
+                        .show()
+
+                    stopRingtoneButton.isVisible = true
+                    /* Stop ringtone after 5 minutes if user hasn't stopped it yet.
+                     * TODO: Make this configurable.
+                     */
+                    thread {
+                        var i = 0
+                        val fiveMinutes = 5 * 60
+                        while (timer.isPlaying()) {
+                            Thread.sleep(1000)
+                            if (++i > fiveMinutes) {
+                                runOnUiThread {
+                                    stopRingtoneButton.callOnClick()
+                                }
+                                break
+                            }
+                        }
+                    }
                 }
 
                 firstTimeRunningTimer = true
@@ -232,16 +295,21 @@ class MainActivity : AppCompatActivity() {
                         Toast.LENGTH_SHORT
                     ).show()
             } else {
-                timer = Timer(hoursPicker, minutesPicker, secondsPicker)
+                setStatusText(
+                    false,
+                    hoursPicker.value,
+                    minutesPicker.value,
+                    secondsPicker.value,
+                    statusText
+                )
+                timer = Timer(this, hoursPicker, minutesPicker, secondsPicker)
                 timer.start()
                 thread = Thread(timer)
                 thread.start()
                 pauseButton.text = getString(R.string.pause)
                 /* For progress bar to work as expected. */
                 started = Date()
-                totalDuration = (hours * 3600000
-                        + minutes * 60000
-                        + seconds * 1000).toLong()
+                totalDuration = (hours * 3600000 + minutes * 60000 + seconds * 1000).toLong()
 
                 Toast
                     .makeText(
@@ -251,6 +319,11 @@ class MainActivity : AppCompatActivity() {
                     )
                     .show()
             }
+        }
+
+        stopRingtoneButton.setOnClickListener {
+            timer.stopRingtone()
+            stopRingtoneButton.isVisible = false
         }
     }
 
@@ -268,44 +341,40 @@ class MainActivity : AppCompatActivity() {
         }
 
         val calendar = Calendar.getInstance()
-        var hour = h
-        var minutes = m
-        var seconds = s
+        var hour = h + calendar.get(Calendar.HOUR)
+        var minutes = m + calendar.get(Calendar.MINUTE)
+        var seconds = s + calendar.get(Calendar.SECOND)
         var indicator = calendar.get(Calendar.AM_PM)
-
-        val calculateTime: () -> Unit = {
-            while (seconds >= 60) {
-                ++minutes
-                seconds -= 60
-            }
-
-            while (minutes >= 60) {
-                ++hour
-                --minutes
-            }
-
-            while (hour >= 12) {
-                hour -= 12
-                indicator = if (indicator == Calendar.AM) {
-                    Calendar.PM
-                } else {
-                    Calendar.AM
-                }
+        val getIndicator: () -> String = {
+            if (indicator == Calendar.AM) {
+                indicator = Calendar.PM
+                "AM"
+            } else {
+                indicator = Calendar.AM
+                "PM"
             }
         }
+        var amPM = getIndicator()
 
-        calculateTime()
+        while (minutes >= 60) {
+            minutes -= 60
+            ++hour
+        }
 
-        hour += calendar.get(Calendar.HOUR)
-        minutes += calendar.get(Calendar.MINUTE)
-        seconds += calendar.get(Calendar.SECOND)
+        while (seconds >= 60) {
+            seconds -= 60
+            ++minutes
+        }
 
-        calculateTime()
+        while (hour >= 12) {
+            hour -= 12
+            indicator = if (indicator == Calendar.AM) {
+                Calendar.PM
+            } else {
+                Calendar.AM
+            }
 
-        val amPM = if (indicator == Calendar.AM) {
-            "AM"
-        } else {
-            "PM"
+            amPM = getIndicator()
         }
 
         endAtText = getString(R.string.message)

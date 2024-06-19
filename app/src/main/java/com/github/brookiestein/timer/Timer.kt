@@ -1,11 +1,16 @@
 package com.github.brookiestein.timer
 
+import android.content.Context
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.widget.NumberPicker
+import kotlin.concurrent.thread
 
 /* Timer modifies NumberPicker's values, but not the view itself.
  * That's not possible because Android doesn't allow to modify the view in another thread.
  */
 class Timer(
+    private val context: Context,
     private val hoursPicker: NumberPicker,
     private val minutesPicker: NumberPicker,
     private val secondsPicker: NumberPicker
@@ -16,6 +21,8 @@ class Timer(
     private var hours = hoursPicker.value
     private var minutes = minutesPicker.value
     private var seconds = secondsPicker.value
+    private val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+    private val mediaPlayer = MediaPlayer.create(context, uri)
 
     fun start() {
         if (hasBeenStarted) {
@@ -40,9 +47,27 @@ class Timer(
 
     fun isRunning() = running
     fun atEnd() = end
+    private fun startRingtone() {
+        mediaPlayer.isLooping = true
+        mediaPlayer.start()
+    }
+    fun stopRingtone() {
+        mediaPlayer.stop()
+        mediaPlayer.release()
+    }
+    fun isPlaying() : Boolean {
+        val result = try {
+            mediaPlayer.isPlaying
+        } catch (e: IllegalStateException) {
+            false
+        }
+        return result
+    }
 
     override fun run() {
         while (running) {
+            Thread.sleep(1000)
+
             if (seconds == 0) {
                 if (minutes > 0) {
                     --minutes
@@ -57,16 +82,16 @@ class Timer(
             }
 
             seconds -= 1
-            hoursPicker.value = hours
-            minutesPicker.value = minutes
-            secondsPicker.value = seconds
 
             if (hours == 0 && minutes == 0 && seconds == 0) {
                 stop()
+                startRingtone()
                 break
             }
 
-            Thread.sleep(1000)
+            hoursPicker.value = hours
+            minutesPicker.value = minutes
+            secondsPicker.value = seconds
         }
     }
 }
