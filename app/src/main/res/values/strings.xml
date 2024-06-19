@@ -26,8 +26,17 @@
     <string name="empty" translatable="false"></string>
     <string name="action" translatable="false">Action</string>
     <string name="noAction" translatable="false">NoAction</string>
+    <string name="preferences" translatable="false">com.github.brookiestein.timer.preferences</string>
     <string name="stopAction" translatable="false">com.github.brookiestein.timer.stop</string>
     <string name="pauseAction" translatable="false">com.github.brookiestein.timer.pause</string>
     <string name="resumeAction" translatable="false">com.github.brookiestein.timer.resume</string>
     <string name="stopRingtone">Stop Ringtone</string>
+    <string name="whenTimerFinishesHeader">When timer finishes</string>
+    <string name="settingsOption">Settings</string>
+    <string name="playSound">Play sound</string>
+    <string name="playSoundTime">Play sound for (in minutes)</string>
+    <string name="playSoundPreference" translatable="false">PlaySound</string>
+    <string name="playSoundForPreference" translatable="false">PlaySoundFor</string>
+    <string name="vibratePreference" translatable="false">Vibrate</string>
+    <string name="vibrate">Vibrate</string>
 </resources>

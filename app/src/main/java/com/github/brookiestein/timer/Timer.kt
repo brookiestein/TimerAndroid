@@ -3,6 +3,8 @@ package com.github.brookiestein.timer
 import android.content.Context
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import android.widget.NumberPicker
 import kotlin.concurrent.thread
 
@@ -23,6 +25,11 @@ class Timer(
     private var seconds = secondsPicker.value
     private val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
     private val mediaPlayer = MediaPlayer.create(context, uri)
+    private var vibrating = false
+    private val preferences = context.getSharedPreferences(
+        context.getString(R.string.preferences),
+        Context.MODE_PRIVATE
+    )
 
     init {
         mediaPlayer.isLooping = true
@@ -67,6 +74,18 @@ class Timer(
         return result
     }
 
+    private fun startVibration() {
+        val vibrator = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+        val vibrationEffect = VibrationEffect.createOneShot(
+            500, VibrationEffect.DEFAULT_AMPLITUDE
+        )
+        vibrator.defaultVibrator.vibrate(vibrationEffect)
+    }
+
+    fun stopVibration() {
+        vibrating = false
+    }
+
     override fun run() {
         while (running) {
             Thread.sleep(1000)
@@ -88,7 +107,20 @@ class Timer(
 
             if (hours == 0 && minutes == 0 && seconds == 0) {
                 stop()
-                startRingtone()
+                if (preferences.getBoolean(context.getString(R.string.playSoundPreference), false)) {
+                    startRingtone()
+
+                    if (preferences.getBoolean(context.getString(R.string.vibratePreference), false)) {
+                        vibrating = true
+                        thread {
+                            while (vibrating) {
+                                startVibration()
+                                Thread.sleep(1000)
+                            }
+                        }
+                    }
+                }
+
                 break
             }
 

@@ -24,4 +24,9 @@
     <string name="second">Segundo</string>
     <string name="timerFinished">Temporizador terminado.</string>
     <string name="stopRingtone">Detener tono</string>
+    <string name="whenTimerFinishesHeader">Cuando el temporizador termina</string>
+    <string name="settingsOption">Ajustes</string>
+    <string name="playSound">Reproducir sonido</string>
+    <string name="playSoundTime">Reproducir sonido durante (en minutos)</string>
+    <string name="vibrate">Vibrar</string>
 </resources>

@@ -12,6 +12,8 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.Button
 import android.widget.NumberPicker
 import android.widget.TextView
@@ -57,9 +59,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        val inflater = menuInflater
+        inflater.inflate(R.menu.menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_settings -> {
+                val intent = Intent(this, Settings::class.java)
+                startActivity(intent)
+                return true
+            } else -> super.onOptionsItemSelected(item)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        val toolbar = findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
         val intentFilter = IntentFilter().apply {
             addAction(getString(R.string.stopAction))
@@ -73,7 +94,7 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.RECEIVER_EXPORTED
         )
 
-        preferences = getPreferences(Context.MODE_PRIVATE)
+        preferences = getSharedPreferences(getString(R.string.preferences), Context.MODE_PRIVATE)
         requestPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()) { isGranted ->
             if (!isGranted) {
@@ -241,20 +262,20 @@ class MainActivity : AppCompatActivity() {
                         .show()
 
                     if (!stoppedByButton) {
-                        stopRingtoneButton.isVisible = true
-                        /* Stop ringtone after 5 minutes if user hasn't stopped it yet.
-                         * TODO: Make this configurable.
-                         */
-                        thread {
-                            var i = 0
-                            val fiveMinutes = 5 * 60
-                            while (timer.isPlaying()) {
-                                Thread.sleep(1000)
-                                if (++i > fiveMinutes) {
-                                    runOnUiThread {
-                                        stopRingtoneButton.callOnClick()
+                        if (preferences.getBoolean(getString(R.string.playSoundPreference), false)) {
+                            stopRingtoneButton.isVisible = true
+                            thread {
+                                var i = 0
+                                val stopAfter = preferences.getInt(
+                                    getString(R.string.playSoundForPreference), 5) * 60
+                                while (timer.isPlaying()) {
+                                    Thread.sleep(1000)
+                                    if (++i > stopAfter) {
+                                        runOnUiThread {
+                                            stopRingtoneButton.callOnClick()
+                                        }
+                                        break
                                     }
-                                    break
                                 }
                             }
                         }
@@ -322,6 +343,7 @@ class MainActivity : AppCompatActivity() {
 
         stopRingtoneButton.setOnClickListener {
             timer.stopRingtone()
+            timer.stopVibration()
             stopRingtoneButton.isVisible = false
         }
     }
