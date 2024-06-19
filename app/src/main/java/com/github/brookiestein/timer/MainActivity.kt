@@ -98,6 +98,7 @@ class MainActivity : AppCompatActivity() {
         val runningForTextView: TextView = findViewById(R.id.runningForTextView)
         val statusText: TextView = findViewById(R.id.statusTextView)
         var firstTimeRunningTimer = true
+        var stoppedByButton = false
 
         hoursPicker.minValue = 0
         hoursPicker.maxValue = 23
@@ -138,17 +139,13 @@ class MainActivity : AppCompatActivity() {
             if (startButton.text == getString(R.string.stop)) {
                 startButton.text = getString(R.string.start)
                 timer.stop()
-                Toast
-                    .makeText(
-                        this,
-                        getString(R.string.timerStopped),
-                        Toast.LENGTH_SHORT
-                    )
-                    .show()
+                stoppedByButton = true
                 return@setOnClickListener
             }
 
+            stoppedByButton = false
             started = Date()
+
             if (firstTimeRunningTimer) {
                 val hours = hoursPicker.value
                 val minutes = minutesPicker.value
@@ -243,20 +240,22 @@ class MainActivity : AppCompatActivity() {
                         )
                         .show()
 
-                    stopRingtoneButton.isVisible = true
-                    /* Stop ringtone after 5 minutes if user hasn't stopped it yet.
-                     * TODO: Make this configurable.
-                     */
-                    thread {
-                        var i = 0
-                        val fiveMinutes = 5 * 60
-                        while (timer.isPlaying()) {
-                            Thread.sleep(1000)
-                            if (++i > fiveMinutes) {
-                                runOnUiThread {
-                                    stopRingtoneButton.callOnClick()
+                    if (!stoppedByButton) {
+                        stopRingtoneButton.isVisible = true
+                        /* Stop ringtone after 5 minutes if user hasn't stopped it yet.
+                         * TODO: Make this configurable.
+                         */
+                        thread {
+                            var i = 0
+                            val fiveMinutes = 5 * 60
+                            while (timer.isPlaying()) {
+                                Thread.sleep(1000)
+                                if (++i > fiveMinutes) {
+                                    runOnUiThread {
+                                        stopRingtoneButton.callOnClick()
+                                    }
+                                    break
                                 }
-                                break
                             }
                         }
                     }
@@ -334,7 +333,13 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun setStatusText(clear: Boolean, h: Int, m: Int, s: Int, statusText: TextView) {
+    private fun setStatusText(
+        clear: Boolean,
+        h: Int,
+        m: Int, s
+        : Int,
+        statusText: TextView
+    ) {
         if (clear) {
             statusText.text = getString(R.string.empty)
             return

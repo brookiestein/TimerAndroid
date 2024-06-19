@@ -24,6 +24,10 @@ class Timer(
     private val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
     private val mediaPlayer = MediaPlayer.create(context, uri)
 
+    init {
+        mediaPlayer.isLooping = true
+    }
+
     fun start() {
         if (hasBeenStarted) {
             return
@@ -48,7 +52,6 @@ class Timer(
     fun isRunning() = running
     fun atEnd() = end
     private fun startRingtone() {
-        mediaPlayer.isLooping = true
         mediaPlayer.start()
     }
     fun stopRingtone() {
@@ -89,9 +92,12 @@ class Timer(
                 break
             }
 
-            hoursPicker.value = hours
-            minutesPicker.value = minutes
-            secondsPicker.value = seconds
+            /* Last check because timer could be stopped while thread was sleeping */
+            if (running) {
+                hoursPicker.value = hours
+                minutesPicker.value = minutes
+                secondsPicker.value = seconds
+            }
         }
     }
 }
