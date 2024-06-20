@@ -23,7 +23,7 @@
     <string name="notificationsNotAllowed">Permissions not given to show notifications.</string>
     <string name="permissionDenied">To get a better experience, it\'s recommended to allow notifications.</string>
     <string name="permissionAsked" translatable="false">NotificationPermission</string>
-    <string name="empty" translatable="false"></string>
+    <string name="empty" translatable="false"> </string>
     <string name="action" translatable="false">Action</string>
     <string name="noAction" translatable="false">NoAction</string>
     <string name="preferences" translatable="false">com.github.brookiestein.timer.preferences</string>

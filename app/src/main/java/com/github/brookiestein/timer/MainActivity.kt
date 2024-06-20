@@ -119,7 +119,7 @@ class MainActivity : AppCompatActivity() {
         val runningForTextView: TextView = findViewById(R.id.runningForTextView)
         val statusText: TextView = findViewById(R.id.statusTextView)
         var firstTimeRunningTimer = true
-        var stoppedByButton = false
+        var stoppedByButton: Boolean
 
         hoursPicker.minValue = 0
         hoursPicker.maxValue = 23
@@ -502,6 +502,14 @@ class MainActivity : AppCompatActivity() {
                 pauseOrResumeActionText,
                 pausePendingIntent
             )
+
+        val mainActivityIntent = Intent(this, MainActivity::class.java)
+        val mainActivityPendingIntent = PendingIntent.getActivity(
+            this, 0,
+            mainActivityIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+        builder.setContentIntent(mainActivityPendingIntent)
 
         with(NotificationManagerCompat.from(this@MainActivity)) {
             val allowed = ActivityCompat.checkSelfPermission(this@MainActivity,
