@@ -228,7 +228,9 @@ class MainActivity : AppCompatActivity() {
             firstTimeRunningTimer = true
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.cancel(notificationChannelID)
-            sendStopNotification()
+            if (!stoppedByButton) {
+                sendStopNotification()
+            }
         }
     }
 
@@ -248,13 +250,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 getString(R.string.stopSoundAction) -> {
                     stopRingtoneButton.callOnClick()
-                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    nm.cancel(notificationChannelID)
                 }
                 getString(R.string.stopVibrationAction) -> {
                     stopRingtoneButton.callOnClick()
-                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    nm.cancel(notificationChannelID)
                 }
             }
         }
@@ -473,6 +471,9 @@ class MainActivity : AppCompatActivity() {
             checkForTimerFinished.workRequest()?.let { it1 ->
                 checkForTimerFinished.workManager().cancelWorkById(it1.id)
             }
+
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(notificationChannelID)
         }
     }
 
@@ -589,6 +590,7 @@ class MainActivity : AppCompatActivity() {
         val importance = NotificationManager.IMPORTANCE_LOW
         val channel = NotificationChannel(name, name, importance).apply {
             description = descriptionText
+            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
         }
 
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

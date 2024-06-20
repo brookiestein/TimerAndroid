@@ -25,3 +25,6 @@ replay_pid*
 
 # release directory
 release
+
+# kotlin directory
+.kotlin
