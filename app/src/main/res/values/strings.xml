@@ -31,6 +31,7 @@
     <string name="pauseAction" translatable="false">com.github.brookiestein.timer.pause</string>
     <string name="resumeAction" translatable="false">com.github.brookiestein.timer.resume</string>
     <string name="stopRingtone">Stop Ringtone</string>
+    <string name="stopVibration">Stop Vibration</string>
     <string name="whenTimerFinishesHeader">When timer finishes</string>
     <string name="settingsOption">Settings</string>
     <string name="playSound">Play sound</string>
@@ -39,4 +40,6 @@
     <string name="playSoundForPreference" translatable="false">PlaySoundFor</string>
     <string name="vibratePreference" translatable="false">Vibrate</string>
     <string name="vibrate">Vibrate</string>
+    <string name="vibrateTime">Vibrate for (in minutes)</string>
+    <string name="vibrateTimePreference" translatable="false">VibrateTime</string>
 </resources>

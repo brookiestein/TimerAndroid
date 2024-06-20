@@ -25,6 +25,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.work.OneTimeWorkRequest
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -118,8 +122,14 @@ class MainActivity : AppCompatActivity() {
         val secondsPicker: NumberPicker = findViewById(R.id.secondsPicker)
         val runningForTextView: TextView = findViewById(R.id.runningForTextView)
         val statusText: TextView = findViewById(R.id.statusTextView)
+        /* This property controls whether or not running for text view gets updated. */
         var firstTimeRunningTimer = true
+        /* Timer can be stopped by itself or by user.
+         * This property controls whether or not started playing sound or vibrating.
+         */
         var stoppedByButton: Boolean
+        var workRequest: OneTimeWorkRequest? = null
+        val workManager = WorkManager.getInstance(this)
 
         hoursPicker.minValue = 0
         hoursPicker.maxValue = 23
@@ -262,8 +272,16 @@ class MainActivity : AppCompatActivity() {
                         .show()
 
                     if (!stoppedByButton) {
+                        val vibrate = preferences.getBoolean(getString(R.string.vibratePreference), false)
+                        val vibrateFor = preferences.getInt(getString(R.string.vibrateTimePreference), 0)
+                        if (vibrate) {
+                            workRequest = OneTimeWorkRequestBuilder<VibratorWorker>().build()
+                            workManager.enqueue(workRequest!!)
+                        }
+
                         if (preferences.getBoolean(getString(R.string.playSoundPreference), false)) {
                             stopRingtoneButton.isVisible = true
+                            stopRingtoneButton.text = getString(R.string.stopRingtone)
                             thread {
                                 var i = 0
                                 val stopAfter = preferences.getInt(
@@ -276,6 +294,23 @@ class MainActivity : AppCompatActivity() {
                                         }
                                         break
                                     }
+                                }
+                            }
+                        } else if (vibrate && vibrateFor != 0) {
+                            stopRingtoneButton.text = getString(R.string.stopVibration)
+                            stopRingtoneButton.isVisible = true
+
+                            thread {
+                                while (true) {
+                                    if (workManager.getWorkInfoById(workRequest!!.id).get().state == WorkInfo.State.SUCCEEDED) {
+                                        break
+                                    }
+
+                                    Thread.sleep(1000)
+                                }
+
+                                runOnUiThread {
+                                    stopRingtoneButton.isVisible = false
                                 }
                             }
                         }
@@ -342,9 +377,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         stopRingtoneButton.setOnClickListener {
-            timer.stopRingtone()
-            timer.stopVibration()
+            if (stopRingtoneButton.text == getString(R.string.stopRingtone)) {
+                timer.stopRingtone()
+            }
+
             stopRingtoneButton.isVisible = false
+            workRequest?.let { it1 -> workManager.cancelWorkById(it1.id) }
         }
     }
 

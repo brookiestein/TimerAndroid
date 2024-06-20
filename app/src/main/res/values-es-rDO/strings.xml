@@ -29,4 +29,6 @@
     <string name="playSound">Reproducir sonido</string>
     <string name="playSoundTime">Reproducir sonido durante (en minutos)</string>
     <string name="vibrate">Vibrar</string>
+    <string name="vibrateTime">Vibrar durante (en minutos)</string>
+    <string name="stopVibration">Detener vibración</string>
 </resources>
