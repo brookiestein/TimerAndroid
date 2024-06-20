@@ -8,7 +8,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -36,28 +35,226 @@ import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
-    private lateinit var preferences: SharedPreferences
+    private lateinit var runningForTextView: TextView
+    private lateinit var statusText: TextView
+    private lateinit var hoursPicker: NumberPicker
+    private lateinit var minutesPicker: NumberPicker
+    private lateinit var secondsPicker: NumberPicker
     private lateinit var startButton: Button
     private lateinit var pauseButton: Button
+    private lateinit var stopRingtoneButton: Button
     private lateinit var timer: Timer
     private lateinit var started: Date
+    private lateinit var checkForTimerFinished: CheckForTimerFinished
     private val notificationChannelID = 0
     private var endAtText = ""
     private var totalDuration: Long = 0
+
+    private inner class CheckForTimerFinished(
+        private val setEnabled: (Boolean) -> Unit,
+        private var stoppedByButton: Boolean,
+        private var firstTimeRunningTimer: Boolean) : Runnable
+    {
+        private val workManager = WorkManager.getInstance(this@MainActivity)
+        private var workRequest: OneTimeWorkRequest? = null
+        private val preferences = getSharedPreferences(getString(R.string.preferences), Context.MODE_PRIVATE)
+        private val playSoundPreference = preferences.getBoolean(getString(R.string.playSoundPreference), false)
+        private val vibratePreference = preferences.getBoolean(getString(R.string.vibratePreference), false)
+
+        fun firstTimeRunningTimer() = firstTimeRunningTimer
+        fun workRequest() = workRequest
+        fun workManager() = workManager
+        fun stoppedByButton(newVal: Boolean) {
+            stoppedByButton = newVal
+        }
+
+        private fun sendStopNotification() {
+            val stopSoundIntent = Intent(getString(R.string.stopSoundAction))
+            val stopSoundPendingIntent = PendingIntent.getBroadcast(
+                this@MainActivity,
+                2,
+                stopSoundIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val stopVibrationIntent = Intent(getString(R.string.stopVibrationAction))
+            val stopVibrationPendingIntent = PendingIntent.getBroadcast(
+                this@MainActivity,
+                3,
+                stopVibrationIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val builder = NotificationCompat.Builder(
+                this@MainActivity,
+                getString(R.string.app_name)
+            )
+                .setSmallIcon(R.drawable.logo)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(getString(R.string.timerFinished))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setOngoing(true)
+                .setAutoCancel(true)
+
+            if (playSoundPreference) {
+                builder.addAction(
+                    R.drawable.logo,
+                    getString(R.string.stopRingtone),
+                    stopSoundPendingIntent
+                )
+            } else if (vibratePreference) {
+                builder.addAction(
+                    R.drawable.logo,
+                    getString(R.string.stopVibration),
+                    stopVibrationPendingIntent
+                )
+            }
+
+            val mainActivityIntent = Intent(this@MainActivity, MainActivity::class.java)
+            val mainActivityPendingIntent = PendingIntent.getActivity(
+                this@MainActivity, 0,
+                mainActivityIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.setContentIntent(mainActivityPendingIntent)
+
+            with(NotificationManagerCompat.from(this@MainActivity)) {
+                val allowed = ActivityCompat.checkSelfPermission(this@MainActivity,
+                    Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                if (!allowed) {
+                    return@with
+                }
+
+                notify(notificationChannelID, builder.build())
+            }
+        }
+
+        override fun run() {
+            var firstTime = true
+            var sentLastNotification = false
+            setStatusText(
+                false,
+                hoursPicker.value,
+                minutesPicker.value,
+                secondsPicker.value,
+                statusText
+            )
+
+            while (!timer.atEnd()) {
+                if (timer.isRunning() || !sentLastNotification) {
+                    sentLastNotification = !timer.isRunning()
+
+                    sendNotification(
+                        hoursPicker,
+                        minutesPicker,
+                        secondsPicker,
+                        firstTime,
+                        sentLastNotification
+                    )
+                }
+
+                firstTime = false
+
+                Thread.sleep(1000)
+            }
+
+            runOnUiThread {
+                runningForTextView.text = getString(R.string.empty)
+                startButton.text = getString(R.string.start)
+                setEnabled(true)
+                setStatusText(true, 0, 0, 0, statusText)
+
+                val text = if (stoppedByButton) {
+                    getString(R.string.timerStopped)
+                } else {
+                    getString(R.string.timerFinished)
+                }
+
+                Toast
+                    .makeText(
+                        this@MainActivity,
+                        text,
+                        Toast.LENGTH_LONG
+                    )
+                    .show()
+
+                if (!stoppedByButton) {
+                    val vibrateFor = preferences.getInt(getString(R.string.vibrateTimePreference), 0)
+                    if (vibratePreference) {
+                        workRequest = OneTimeWorkRequestBuilder<VibratorWorker>().build()
+                        workManager.enqueue(workRequest!!)
+                    }
+
+                    if (playSoundPreference) {
+                        stopRingtoneButton.isVisible = true
+                        stopRingtoneButton.text = getString(R.string.stopRingtone)
+                        thread {
+                            var i = 0
+                            val stopAfter = preferences.getInt(
+                                getString(R.string.playSoundForPreference), 5) * 60
+                            while (timer.isPlaying()) {
+                                Thread.sleep(1000)
+                                if (++i > stopAfter) {
+                                    runOnUiThread {
+                                        stopRingtoneButton.callOnClick()
+                                    }
+                                    break
+                                }
+                            }
+                        }
+                    } else if (vibratePreference && vibrateFor != 0) {
+                        stopRingtoneButton.text = getString(R.string.stopVibration)
+                        stopRingtoneButton.isVisible = true
+
+                        thread {
+                            while (true) {
+                                if (workManager.getWorkInfoById(workRequest!!.id).get().state == WorkInfo.State.SUCCEEDED) {
+                                    break
+                                }
+
+                                Thread.sleep(1000)
+                            }
+
+                            runOnUiThread {
+                                stopRingtoneButton.isVisible = false
+                            }
+                        }
+                    }
+                }
+            }
+
+            firstTimeRunningTimer = true
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(notificationChannelID)
+            sendStopNotification()
+        }
+    }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val action = intent.action
 
             when (action) {
-                getString(R.string.stopAction) -> {
+                getString(R.string.stopTimerAction) -> {
                     startButton.callOnClick()
                 }
-                getString(R.string.pauseAction) -> {
+                getString(R.string.pauseTimerAction) -> {
                     pauseButton.callOnClick()
                 }
-                getString(R.string.resumeAction) -> {
+                getString(R.string.resumeTimerAction) -> {
                     pauseButton.callOnClick()
+                }
+                getString(R.string.stopSoundAction) -> {
+                    stopRingtoneButton.callOnClick()
+                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    nm.cancel(notificationChannelID)
+                }
+                getString(R.string.stopVibrationAction) -> {
+                    stopRingtoneButton.callOnClick()
+                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    nm.cancel(notificationChannelID)
                 }
             }
         }
@@ -74,7 +271,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_settings -> {
                 val intent = Intent(this, Settings::class.java)
                 startActivity(intent)
-                return true
+                true
             } else -> super.onOptionsItemSelected(item)
         }
     }
@@ -87,9 +284,11 @@ class MainActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
 
         val intentFilter = IntentFilter().apply {
-            addAction(getString(R.string.stopAction))
-            addAction(getString(R.string.pauseAction))
-            addAction(getString(R.string.resumeAction))
+            addAction(getString(R.string.stopTimerAction))
+            addAction(getString(R.string.pauseTimerAction))
+            addAction(getString(R.string.resumeTimerAction))
+            addAction(getString(R.string.stopSoundAction))
+            addAction(getString(R.string.stopVibrationAction))
         }
         ContextCompat.registerReceiver(
             this,
@@ -98,7 +297,7 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.RECEIVER_EXPORTED
         )
 
-        preferences = getSharedPreferences(getString(R.string.preferences), Context.MODE_PRIVATE)
+        val preferences = getSharedPreferences(getString(R.string.preferences), Context.MODE_PRIVATE)
         requestPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()) { isGranted ->
             if (!isGranted) {
@@ -117,19 +316,34 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
 
-        val hoursPicker: NumberPicker = findViewById(R.id.hoursPicker)
-        val minutesPicker: NumberPicker = findViewById(R.id.minutesPicker)
-        val secondsPicker: NumberPicker = findViewById(R.id.secondsPicker)
-        val runningForTextView: TextView = findViewById(R.id.runningForTextView)
-        val statusText: TextView = findViewById(R.id.statusTextView)
+        hoursPicker = findViewById(R.id.hoursPicker)
+        minutesPicker = findViewById(R.id.minutesPicker)
+        secondsPicker = findViewById(R.id.secondsPicker)
+        runningForTextView = findViewById(R.id.runningForTextView)
+        statusText = findViewById(R.id.statusTextView)
+
+        val setEnabled: (Boolean) -> Unit = {
+            hoursPicker.isEnabled = it
+            minutesPicker.isEnabled = it
+            secondsPicker.isEnabled = it
+        }
+
         /* This property controls whether or not running for text view gets updated. */
         var firstTimeRunningTimer = true
         /* Timer can be stopped by itself or by user.
          * This property controls whether or not started playing sound or vibrating.
          */
         var stoppedByButton: Boolean
-        var workRequest: OneTimeWorkRequest? = null
-        val workManager = WorkManager.getInstance(this)
+        var threadCheckForTimerFinished: Thread
+        /* This initialization is for firstTimeRunningTimer() to work properly actually the first time.
+         * See conditional on startButton.setOnClickListener.
+         * This state is overwritten afterwards.
+         */
+        checkForTimerFinished = CheckForTimerFinished(
+            setEnabled,
+            stoppedByButton = false,
+            firstTimeRunningTimer = true
+        )
 
         hoursPicker.minValue = 0
         hoursPicker.maxValue = 23
@@ -143,15 +357,9 @@ class MainActivity : AppCompatActivity() {
         secondsPicker.maxValue = 59
         secondsPicker.value = 0
 
-        val setEnabled: (Boolean) -> Unit = {
-            hoursPicker.isEnabled = it
-            minutesPicker.isEnabled = it
-            secondsPicker.isEnabled = it
-        }
-
         startButton = findViewById(R.id.startButton)
         pauseButton = findViewById(R.id.pauseButton)
-        val stopRingtoneButton: Button = findViewById(R.id.stopRingtoneButton)
+        stopRingtoneButton = findViewById(R.id.stopRingtoneButton)
         stopRingtoneButton.isVisible = false
 
         timer = Timer(this, hoursPicker, minutesPicker, secondsPicker)
@@ -171,48 +379,15 @@ class MainActivity : AppCompatActivity() {
                 startButton.text = getString(R.string.start)
                 timer.stop()
                 stoppedByButton = true
+                checkForTimerFinished.stoppedByButton(true)
                 return@setOnClickListener
             }
 
             stoppedByButton = false
             started = Date()
 
-            if (firstTimeRunningTimer) {
-                val hours = hoursPicker.value
-                val minutes = minutesPicker.value
-                val seconds = secondsPicker.value
-
-                val hoursText = if (hours == 1) {
-                    getString(R.string.hour).lowercase()
-                } else {
-                    getString(R.string.hours).lowercase()
-                }
-
-                val minutesText = if (minutes == 1) {
-                    getString(R.string.minute).lowercase()
-                } else {
-                    getString(R.string.minutes).lowercase()
-                }
-
-                val secondsText = if (seconds == 1) {
-                    getString(R.string.second).lowercase()
-                } else {
-                    getString(R.string.seconds).lowercase()
-                }
-
-                runningForTextView.text = String.format(
-                    getString(R.string.runningForText),
-                    hours,
-                    hoursText,
-                    minutes,
-                    minutesText,
-                    seconds,
-                    secondsText
-                )
-
-                totalDuration = (hoursPicker.value * 3600000
-                        + minutesPicker.value * 60000
-                        + secondsPicker.value * 1000).toLong()
+            if (checkForTimerFinished.firstTimeRunningTimer()) {
+                setRunningForText()
                 firstTimeRunningTimer = false
             }
 
@@ -228,101 +403,14 @@ class MainActivity : AppCompatActivity() {
             pauseButton.text = getString(R.string.pause)
             setEnabled(false)
 
-            val checkForTimerFinished = thread(false) {
-                var firstTime = true
-                var sentLastNotification = false
-                setStatusText(
-                    false,
-                    hoursPicker.value,
-                    minutesPicker.value,
-                    secondsPicker.value,
-                    statusText
-                )
+            checkForTimerFinished = CheckForTimerFinished(
+                setEnabled,
+                stoppedByButton,
+                firstTimeRunningTimer
+            )
 
-                while (!timer.atEnd()) {
-                    if (timer.isRunning() || !sentLastNotification) {
-                        sentLastNotification = !timer.isRunning()
-
-                        sendNotification(
-                            hoursPicker,
-                            minutesPicker,
-                            secondsPicker,
-                            firstTime,
-                            sentLastNotification
-                        )
-                    }
-
-                    firstTime = false
-
-                    Thread.sleep(1000)
-                }
-
-                runOnUiThread {
-                    runningForTextView.text = getString(R.string.empty)
-                    startButton.text = getString(R.string.start)
-                    setEnabled(true)
-                    setStatusText(true, 0, 0, 0, statusText)
-
-                    Toast
-                        .makeText(
-                            this,
-                            getString(R.string.timerFinished),
-                            Toast.LENGTH_LONG
-                        )
-                        .show()
-
-                    if (!stoppedByButton) {
-                        val vibrate = preferences.getBoolean(getString(R.string.vibratePreference), false)
-                        val vibrateFor = preferences.getInt(getString(R.string.vibrateTimePreference), 0)
-                        if (vibrate) {
-                            workRequest = OneTimeWorkRequestBuilder<VibratorWorker>().build()
-                            workManager.enqueue(workRequest!!)
-                        }
-
-                        if (preferences.getBoolean(getString(R.string.playSoundPreference), false)) {
-                            stopRingtoneButton.isVisible = true
-                            stopRingtoneButton.text = getString(R.string.stopRingtone)
-                            thread {
-                                var i = 0
-                                val stopAfter = preferences.getInt(
-                                    getString(R.string.playSoundForPreference), 5) * 60
-                                while (timer.isPlaying()) {
-                                    Thread.sleep(1000)
-                                    if (++i > stopAfter) {
-                                        runOnUiThread {
-                                            stopRingtoneButton.callOnClick()
-                                        }
-                                        break
-                                    }
-                                }
-                            }
-                        } else if (vibrate && vibrateFor != 0) {
-                            stopRingtoneButton.text = getString(R.string.stopVibration)
-                            stopRingtoneButton.isVisible = true
-
-                            thread {
-                                while (true) {
-                                    if (workManager.getWorkInfoById(workRequest!!.id).get().state == WorkInfo.State.SUCCEEDED) {
-                                        break
-                                    }
-
-                                    Thread.sleep(1000)
-                                }
-
-                                runOnUiThread {
-                                    stopRingtoneButton.isVisible = false
-                                }
-                            }
-                        }
-                    }
-                }
-
-                firstTimeRunningTimer = true
-
-                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.cancel(notificationChannelID)
-            }
-            checkForTimerFinished.start()
+            threadCheckForTimerFinished = Thread(checkForTimerFinished)
+            threadCheckForTimerFinished.start()
         }
 
         pauseButton.setOnClickListener {
@@ -382,7 +470,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             stopRingtoneButton.isVisible = false
-            workRequest?.let { it1 -> workManager.cancelWorkById(it1.id) }
+            checkForTimerFinished.workRequest()?.let { it1 ->
+                checkForTimerFinished.workManager().cancelWorkById(it1.id)
+            }
         }
     }
 
@@ -391,6 +481,44 @@ class MainActivity : AppCompatActivity() {
         nm.cancelAll()
         unregisterReceiver(receiver)
         super.onDestroy()
+    }
+
+    private fun setRunningForText() {
+        val hours = hoursPicker.value
+        val minutes = minutesPicker.value
+        val seconds = secondsPicker.value
+
+        val hoursText = if (hours == 1) {
+            getString(R.string.hour).lowercase()
+        } else {
+            getString(R.string.hours).lowercase()
+        }
+
+        val minutesText = if (minutes == 1) {
+            getString(R.string.minute).lowercase()
+        } else {
+            getString(R.string.minutes).lowercase()
+        }
+
+        val secondsText = if (seconds == 1) {
+            getString(R.string.second).lowercase()
+        } else {
+            getString(R.string.seconds).lowercase()
+        }
+
+        runningForTextView.text = String.format(
+            getString(R.string.runningForText),
+            hours,
+            hoursText,
+            minutes,
+            minutesText,
+            seconds,
+            secondsText
+        )
+
+        totalDuration = (hoursPicker.value * 3600000
+                + minutesPicker.value * 60000
+                + secondsPicker.value * 1000).toLong()
     }
 
     private fun setStatusText(
@@ -484,12 +612,13 @@ class MainActivity : AppCompatActivity() {
         val m = minutesPicker.value
         val s = secondsPicker.value
         val content = String.format(getString(R.string.format), h, m, s)
+        val preferences = getSharedPreferences(getString(R.string.preferences), Context.MODE_PRIVATE)
 
-        val stopIntent = Intent(getString(R.string.stopAction))
+        val stopIntent = Intent(getString(R.string.stopTimerAction))
         val pauseOrResumeIntent = if (lastNotification) {
-            Intent(getString(R.string.resumeAction))
+            Intent(getString(R.string.resumeTimerAction))
         } else {
-            Intent(getString(R.string.pauseAction))
+            Intent(getString(R.string.pauseTimerAction))
         }
 
         val stopPendingIntent = PendingIntent.getBroadcast(

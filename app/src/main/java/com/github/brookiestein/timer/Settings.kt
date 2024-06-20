@@ -17,14 +17,14 @@ class Settings : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
+        val toolbar = findViewById<Toolbar>(R.id.settingsToolbar)
+        setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+
         preferences = getSharedPreferences(
             getString(R.string.preferences),
             Context.MODE_PRIVATE
         )
-
-        val toolbar = findViewById<Toolbar>(R.id.settingsToolbar)
-        setSupportActionBar(toolbar)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         if (preferences.getInt(getString(R.string.playSoundForPreference), -1) == -1) {
             playSoundFor = 5 /* 5 minutes by default */
@@ -47,7 +47,8 @@ class Settings : AppCompatActivity() {
         val vibrateSwitch: androidx.appcompat.widget.SwitchCompat = findViewById(R.id.vibrateSwitch)
         vibrateSwitch.isChecked = preferences.getBoolean(getString(R.string.vibratePreference), false)
 
-        val vibrateFor = preferences.getInt(getString(R.string.vibrateTimePreference), 0)
+        /* Same as playSound by default */
+        val vibrateFor = preferences.getInt(getString(R.string.vibrateTimePreference), playSoundFor)
         vibrateForEdit = findViewById(R.id.vibrateForEdit)
         vibrateForEdit.setText(vibrateFor.toString())
         vibrateForEdit.isEnabled = vibrateSwitch.isChecked
@@ -58,23 +59,6 @@ class Settings : AppCompatActivity() {
         }
 
         playSoundForEdit.isEnabled = playSound.isChecked
-
-        playSoundForEdit.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) {
-                return@setOnFocusChangeListener
-            }
-
-            val number = playSoundForEdit.text.toString()
-            if (number.isEmpty()) {
-                return@setOnFocusChangeListener
-            }
-
-            if (number.toInt() != playSoundFor) {
-                preferences.edit()
-                    .putInt(getString(R.string.playSoundForPreference), number.toInt())
-                    .apply()
-            }
-        }
     }
 
     override fun onDestroy() {
