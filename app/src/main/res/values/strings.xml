@@ -19,7 +19,7 @@
     <string name="allZeroes">Tell me for how long I\'ll be running first.</string>
     <string name="noNeedToPause">No need to pause.</string>
     <string name="message">Timer will end at</string>
-    <string name="format">Remaining time: %d:%d:%d</string>
+    <string name="format">Remaining time: %s:%s:%s</string>
     <string name="notificationsNotAllowed">Permissions not given to show notifications.</string>
     <string name="permissionDenied">To get a better experience, it\'s recommended to allow notifications.</string>
     <string name="permissionAsked" translatable="false">NotificationPermission</string>

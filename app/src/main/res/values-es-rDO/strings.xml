@@ -16,7 +16,7 @@
     <string name="message">El temporizador terminará a las</string>
     <string name="timerPaused">El temporizador está pausado.</string>
     <string name="timerResumed">Temporizador reanudado.</string>
-    <string name="format">Tiempo restante: %d:%d:%d</string>
+    <string name="format">Tiempo restante: %s:%s:%s</string>
     <string name="notificationsNotAllowed">Mostrar notificaciones no permitido.</string>
     <string name="permissionDenied">Para tener una mejor experiencia, es recomendable permitir las notificaciones.</string>
     <string name="hour">Hora</string>

@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.widget.ProgressBar
 import android.widget.TextView
+import java.util.Locale
 
 class Timer(
     private val context: Context,
@@ -118,11 +119,29 @@ class Timer(
             /* Last check because timer could be stopped while thread was sleeping */
             if (running) {
                 activity.runOnUiThread {
+                    val hoursText = if (hours >= 10) {
+                        String.format(Locale.getDefault(), "%d", hours)
+                    } else {
+                        String.format(Locale.getDefault(), "0%d", hours)
+                    }
+
+                    val minutesText = if (minutes >= 10) {
+                        String.format(Locale.getDefault(), "%d", minutes)
+                    } else {
+                        String.format(Locale.getDefault(), "0%d", minutes)
+                    }
+
+                    val secondsText = if (seconds >= 10) {
+                        String.format(Locale.getDefault(), "%d", seconds)
+                    } else {
+                        String.format(Locale.getDefault(), "0%d", seconds)
+                    }
+
                     remainingTimeTextView.text = String.format(
                         context.getString(R.string.format),
-                        hours,
-                        minutes,
-                        seconds
+                        hoursText,
+                        minutesText,
+                        secondsText
                     )
 
                     progressBar.progress = totalDuration - (hours * 3600000 + minutes * 60000 + seconds * 1000)
