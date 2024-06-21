@@ -15,6 +15,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
 import android.widget.NumberPicker
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
@@ -37,9 +38,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
     private lateinit var runningForTextView: TextView
     private lateinit var statusText: TextView
+    private lateinit var hoursTextView: TextView
+    private lateinit var minutesTextView: TextView
+    private lateinit var secondsTextView: TextView
+    private lateinit var progressBar1: ProgressBar
+    private lateinit var progressBar2: ProgressBar
     private lateinit var hoursPicker: NumberPicker
     private lateinit var minutesPicker: NumberPicker
     private lateinit var secondsPicker: NumberPicker
+    private lateinit var remainingTimeTextView: TextView
     private lateinit var startButton: Button
     private lateinit var pauseButton: Button
     private lateinit var stopRingtoneButton: Button
@@ -131,6 +138,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        private fun resetViews() {
+            hoursTextView.text = getString(R.string.hours)
+            minutesTextView.text = getString(R.string.minutes)
+            secondsTextView.text = getString(R.string.seconds)
+            hoursPicker.value = 0
+            minutesPicker.value = 0
+            secondsPicker.value = 0
+        }
+
         override fun run() {
             var firstTime = true
             var sentLastNotification = false
@@ -145,14 +161,7 @@ class MainActivity : AppCompatActivity() {
             while (!timer.atEnd()) {
                 if (timer.isRunning() || !sentLastNotification) {
                     sentLastNotification = !timer.isRunning()
-
-                    sendNotification(
-                        hoursPicker,
-                        minutesPicker,
-                        secondsPicker,
-                        firstTime,
-                        sentLastNotification
-                    )
+                    sendNotification(firstTime, sentLastNotification)
                 }
 
                 firstTime = false
@@ -165,6 +174,8 @@ class MainActivity : AppCompatActivity() {
                 startButton.text = getString(R.string.start)
                 setEnabled(true)
                 setStatusText(true, 0, 0, 0, statusText)
+                showHideProgressBar(progressBar = false, true)
+                resetViews()
 
                 val text = if (stoppedByButton) {
                     getString(R.string.timerStopped)
@@ -274,6 +285,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /* Show progress bar and hide number pickers, and vice versa. */
+    private fun showHideProgressBar(progressBar: Boolean, numberPickers: Boolean) {
+        progressBar1.isVisible = progressBar
+        progressBar2.isVisible = progressBar
+        progressBar1.progress = 0
+
+        hoursTextView.isVisible = numberPickers
+        minutesTextView.isVisible = numberPickers
+        secondsTextView.isVisible = numberPickers
+
+        hoursPicker.isVisible = numberPickers
+        minutesPicker.isVisible = numberPickers
+        secondsPicker.isVisible = numberPickers
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -288,6 +314,7 @@ class MainActivity : AppCompatActivity() {
             addAction(getString(R.string.stopSoundAction))
             addAction(getString(R.string.stopVibrationAction))
         }
+
         ContextCompat.registerReceiver(
             this,
             receiver,
@@ -314,11 +341,38 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
 
+        progressBar1 = findViewById(R.id.progressBar1)
+        progressBar2 = findViewById(R.id.progressBar2)
+
+        hoursTextView = findViewById(R.id.hoursTextView)
+        minutesTextView = findViewById(R.id.minutesTextView)
+        secondsTextView = findViewById(R.id.secondsTextView)
+
         hoursPicker = findViewById(R.id.hoursPicker)
         minutesPicker = findViewById(R.id.minutesPicker)
         secondsPicker = findViewById(R.id.secondsPicker)
+
+        hoursPicker.minValue = 0
+        hoursPicker.maxValue = 23
+        hoursPicker.value = 0
+
+        minutesPicker.minValue = 0
+        minutesPicker.maxValue = 59
+        minutesPicker.value = 0
+
+        secondsPicker.minValue = 0
+        secondsPicker.maxValue = 59
+        secondsPicker.value = 0
+
         runningForTextView = findViewById(R.id.runningForTextView)
         statusText = findViewById(R.id.statusTextView)
+
+        remainingTimeTextView = findViewById(R.id.remainingTimeTextView)
+
+        startButton = findViewById(R.id.startButton)
+        pauseButton = findViewById(R.id.pauseButton)
+        stopRingtoneButton = findViewById(R.id.stopRingtoneButton)
+        stopRingtoneButton.isVisible = false
 
         val setEnabled: (Boolean) -> Unit = {
             hoursPicker.isEnabled = it
@@ -343,24 +397,16 @@ class MainActivity : AppCompatActivity() {
             firstTimeRunningTimer = true
         )
 
-        hoursPicker.minValue = 0
-        hoursPicker.maxValue = 23
-        hoursPicker.value = 0
+        timer = Timer(
+            this,
+            this,
+            remainingTimeTextView,
+            progressBar1,
+            hoursPicker.value,
+            minutesPicker.value,
+            secondsPicker.value
+        )
 
-        minutesPicker.minValue = 0
-        minutesPicker.maxValue = 59
-        minutesPicker.value = 0
-
-        secondsPicker.minValue = 0
-        secondsPicker.maxValue = 59
-        secondsPicker.value = 0
-
-        startButton = findViewById(R.id.startButton)
-        pauseButton = findViewById(R.id.pauseButton)
-        stopRingtoneButton = findViewById(R.id.stopRingtoneButton)
-        stopRingtoneButton.isVisible = false
-
-        timer = Timer(this, hoursPicker, minutesPicker, secondsPicker)
         var thread: Thread
 
         startButton.setOnClickListener {
@@ -378,6 +424,7 @@ class MainActivity : AppCompatActivity() {
                 timer.stop()
                 stoppedByButton = true
                 checkForTimerFinished.stoppedByButton(true)
+                showHideProgressBar(progressBar = false, true)
                 return@setOnClickListener
             }
 
@@ -392,7 +439,16 @@ class MainActivity : AppCompatActivity() {
             /* Make new thread every time user starts new timer because
              * threads cannot be restarted.
              */
-            timer = Timer(this, hoursPicker, minutesPicker, secondsPicker)
+            timer = Timer(
+                this,
+                this,
+                remainingTimeTextView,
+                progressBar1,
+                hoursPicker.value,
+                minutesPicker.value,
+                secondsPicker.value
+            )
+
             timer.start()
             thread = Thread(timer)
             thread.start()
@@ -409,14 +465,20 @@ class MainActivity : AppCompatActivity() {
 
             threadCheckForTimerFinished = Thread(checkForTimerFinished)
             threadCheckForTimerFinished.start()
+            showHideProgressBar(progressBar = true, false)
         }
 
         pauseButton.setOnClickListener {
-            val hours = hoursPicker.value
-            val minutes = minutesPicker.value
-            val seconds = secondsPicker.value
+            val r = remainingTimeTextView.text.toString()
+            if (r.isEmpty()) {
+                return@setOnClickListener
+            }
 
-            if ((hours == 0 && minutes == 0 && seconds == 0)) {
+            val hours = r.split(":")[1].trim().toInt()
+            val minutes = r.split(":")[2].trim().toInt()
+            val seconds = r.split(":")[3].trim().toInt()
+
+            if (hours == 0 && minutes == 0 && seconds == 0) {
                 Toast
                     .makeText(
                         this,
@@ -435,31 +497,38 @@ class MainActivity : AppCompatActivity() {
                         getString(R.string.timerPaused),
                         Toast.LENGTH_SHORT
                     ).show()
-            } else {
-                setStatusText(
-                    false,
-                    hoursPicker.value,
-                    minutesPicker.value,
-                    secondsPicker.value,
-                    statusText
-                )
-                timer = Timer(this, hoursPicker, minutesPicker, secondsPicker)
-                timer.start()
-                thread = Thread(timer)
-                thread.start()
-                pauseButton.text = getString(R.string.pause)
-                /* For progress bar to work as expected. */
-                started = Date()
-                totalDuration = (hours * 3600000 + minutes * 60000 + seconds * 1000).toLong()
-
-                Toast
-                    .makeText(
-                        this,
-                        getString(R.string.timerResumed),
-                        Toast.LENGTH_SHORT
-                    )
-                    .show()
+                return@setOnClickListener
             }
+
+            setStatusText(
+                false,
+                hoursPicker.value,
+                minutesPicker.value,
+                secondsPicker.value,
+                statusText
+            )
+
+            timer.setNewHours(hours)
+            timer.setNewMinutes(minutes)
+            timer.setNewSeconds(seconds)
+            timer.start()
+
+            thread = Thread(timer)
+            thread.start()
+
+            pauseButton.text = getString(R.string.pause)
+
+            /* For progress bar on drawer to work as expected. */
+            started = Date()
+            totalDuration = (hours * 3600000 + minutes * 60000 + seconds * 1000).toLong()
+
+            Toast
+                .makeText(
+                    this,
+                    getString(R.string.timerResumed),
+                    Toast.LENGTH_SHORT
+                )
+                .show()
         }
 
         stopRingtoneButton.setOnClickListener {
@@ -604,16 +673,8 @@ class MainActivity : AppCompatActivity() {
         return percentage
     }
 
-    private fun sendNotification(hoursPicker: NumberPicker,
-                                minutesPicker: NumberPicker,
-                                secondsPicker: NumberPicker,
-                                 firstTime: Boolean,
-                                 lastNotification: Boolean)
-    {
-        val h = hoursPicker.value
-        val m = minutesPicker.value
-        val s = secondsPicker.value
-        val content = String.format(getString(R.string.format), h, m, s)
+    private fun sendNotification(firstTime: Boolean, lastNotification: Boolean) {
+        val content = remainingTimeTextView.text.toString()
         val preferences = getSharedPreferences(getString(R.string.preferences), Context.MODE_PRIVATE)
 
         val stopIntent = Intent(getString(R.string.stopTimerAction))

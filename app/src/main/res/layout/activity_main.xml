@@ -58,6 +58,38 @@
             android:layout_height="wrap_content"
             android:textSize="20sp" />
 
+        <RelativeLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+            <ProgressBar
+                android:id="@+id/progressBar2"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="260dp"
+                android:layout_height="260dp"
+                android:layout_centerHorizontal="true"
+                android:layout_centerVertical="true"
+                android:layout_gravity="center_horizontal|center"
+                android:indeterminate="false"
+                android:progressDrawable="@drawable/circle_shape_view_2"
+                android:visibility="gone"
+                >
+            </ProgressBar>
+            <ProgressBar
+                android:id="@+id/progressBar1"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="260dp"
+                android:layout_height="260dp"
+                android:layout_centerHorizontal="true"
+                android:layout_centerVertical="true"
+                android:layout_gravity="center_horizontal|center"
+                android:indeterminate="false"
+                android:progressDrawable="@drawable/circle_shape_view_1"
+                android:visibility="gone"
+                >
+
+            </ProgressBar>
+        </RelativeLayout>
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -125,6 +157,13 @@
             android:layout_height="wrap_content"
             android:gravity="center"
             android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/remainingTimeTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAlignment="center"
+                android:textSize="16sp" />
 
             <LinearLayout
                 android:layout_width="wrap_content"

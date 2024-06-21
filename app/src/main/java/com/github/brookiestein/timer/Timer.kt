@@ -3,32 +3,45 @@ package com.github.brookiestein.timer
 import android.content.Context
 import android.media.MediaPlayer
 import android.media.RingtoneManager
-import android.widget.NumberPicker
+import android.widget.ProgressBar
+import android.widget.TextView
 
-/* Timer modifies NumberPicker's values, but not the view itself.
- * That's not possible because Android doesn't allow to modify the view in another thread.
- */
 class Timer(
     private val context: Context,
-    private val hoursPicker: NumberPicker,
-    private val minutesPicker: NumberPicker,
-    private val secondsPicker: NumberPicker
+    private val activity: MainActivity,
+    private val remainingTimeTextView: TextView,
+    private val progressBar: ProgressBar,
+    private var hours: Int,
+    private var minutes: Int,
+    private var seconds: Int
 ) : Runnable {
     private var running = false
     private var end = false
     private var hasBeenStarted = false
-    private var hours = hoursPicker.value
-    private var minutes = minutesPicker.value
-    private var seconds = secondsPicker.value
     private val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
     private val mediaPlayer = MediaPlayer.create(context, uri)
     private val preferences = context.getSharedPreferences(
         context.getString(R.string.preferences),
         Context.MODE_PRIVATE
     )
+    private var totalDuration: Int
 
     init {
         mediaPlayer.isLooping = true
+        totalDuration = hours * 3600000 + minutes * 60000 + seconds * 1000
+        progressBar.max = totalDuration
+    }
+
+    fun setNewHours(newHours: Int) {
+        hours = newHours
+    }
+
+    fun setNewMinutes(newMinutes: Int) {
+        minutes = newMinutes
+    }
+
+    fun setNewSeconds(newSeconds: Int) {
+        seconds = newSeconds
     }
 
     fun start() {
@@ -42,25 +55,29 @@ class Timer(
 
     fun pause() {
         running = false
+        hasBeenStarted = false
     }
 
     fun stop() {
         end = true
         running = false
-        hoursPicker.value = 0
-        minutesPicker.value = 0
-        secondsPicker.value = 0
+        activity.runOnUiThread {
+            remainingTimeTextView.text = context.getString(R.string.empty)
+        }
     }
 
     fun isRunning() = running
     fun atEnd() = end
+
     private fun startRingtone() {
         mediaPlayer.start()
     }
+
     fun stopRingtone() {
         mediaPlayer.stop()
         mediaPlayer.release()
     }
+
     fun isPlaying() : Boolean {
         val result = try {
             mediaPlayer.isPlaying
@@ -100,9 +117,16 @@ class Timer(
 
             /* Last check because timer could be stopped while thread was sleeping */
             if (running) {
-                hoursPicker.value = hours
-                minutesPicker.value = minutes
-                secondsPicker.value = seconds
+                activity.runOnUiThread {
+                    remainingTimeTextView.text = String.format(
+                        context.getString(R.string.format),
+                        hours,
+                        minutes,
+                        seconds
+                    )
+
+                    progressBar.progress = totalDuration - (hours * 3600000 + minutes * 60000 + seconds * 1000)
+                }
             }
         }
     }
